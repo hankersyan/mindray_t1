@@ -6,16 +6,20 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.hankers.mdi.mdi_utils.MDILog;
 import io.hankers.mdi.mindray.t1.Models.HL7Message;
 import io.hankers.mdi.mindray.t1.Models.HL7Utils;
+import io.hankers.mdi.mindray.t1.Models.VitalSign;
 
 public class DataReceiver extends Thread {
 	Socket _socket;
 	private char[] _cbuf = new char[2048];
 	String _ip;
 	int _port = 4601;
+	List<HL7Message> _msgList = new ArrayList<HL7Message>();
 
 	public DataReceiver(String ip, int port) throws UnknownHostException, IOException {
 		_ip = ip;
@@ -102,17 +106,28 @@ public class DataReceiver extends Thread {
 
 	private void processHl7(String hl7) {
 		HL7Message msg = HL7Utils.create(hl7.getBytes(), hl7.length());
-		msg.publish();
+		// msg.publish();
+		if (_msgList.size() > 0) {
+			if (_msgList.get(0)._timestamp != msg._timestamp) {
+				long ts = _msgList.get(0)._timestamp;
+//				if () {
+//					
+//				}
+			}
+		}
+		_msgList.add(msg);
 	}
 
 	public static class HeartBeat extends Thread {
 		Socket _sk;
 		byte[] _content = "MSH|^~\\&|||||||ORU^R01|106|P|2.3.1|".getBytes();
+
 		public HeartBeat(Socket sk) {
 			_sk = sk;
 		}
+
 		public void run() {
-			while(!Thread.currentThread().isInterrupted()) {
+			while (!Thread.currentThread().isInterrupted()) {
 				try {
 					OutputStream os = _sk.getOutputStream();
 					os.write(0x0B);

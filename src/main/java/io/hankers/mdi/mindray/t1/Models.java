@@ -14,15 +14,9 @@ public class Models {
 	public static class HL7Message {
 		String _type;
 		int _controlId;
+		long _timestamp;
 
 		public void readSegment(String segment) {
-		}
-
-		public String readField(String[] fields, int index) {
-			if (fields.length > index && fields[index] != null) {
-				return fields[index];
-			}
-			return null;
 		}
 
 		public void publish() {
@@ -35,6 +29,7 @@ public class Models {
 			boolean b = buf[0] == 0x0B;
 			length = Math.min(buf.length, length);
 			String str = new String(buf, b ? 1 : 0, b ? length - 1 : length);
+			MDILog.t(str);
 
 			HL7Message ret = null;
 			String[] strs = str.split("\\r");
@@ -52,6 +47,13 @@ public class Models {
 				}
 			}
 			return ret;
+		}
+
+		public static String readField(String[] fields, int index) {
+			if (fields.length > index && fields[index] != null) {
+				return fields[index];
+			}
+			return null;
 		}
 
 	}
@@ -82,11 +84,11 @@ public class Models {
 						_admittedDate = _sdf.parse(fields[2]);
 					}
 				} else if (segment.startsWith("PID")) {
-					_pGuid = readField(fields, 4);
-					_pName = readField(fields, 6);
+					_pGuid = HL7Utils.readField(fields, 4);
+					_pName = HL7Utils.readField(fields, 6);
 				} else if (segment.startsWith("PV1")) {
-					_patientClass = readField(fields, 2);
-					String pv1 = readField(fields, 3);
+					_patientClass = HL7Utils.readField(fields, 2);
+					String pv1 = HL7Utils.readField(fields, 3);
 					if (pv1 != null && !pv1.isEmpty()) {
 						String[] components = pv1.split("^");
 						if (components != null && components.length > 2) {
@@ -122,7 +124,6 @@ public class Models {
 		String sys; // 170
 		String dia; // 171
 		String mean; // 172
-		long timestamp;
 		static SimpleDateFormat _sdf = new SimpleDateFormat("yyyyMMddHHmmss");
 
 		public VitalSign() {
@@ -134,8 +135,8 @@ public class Models {
 			String[] fields = segment.split("\\|");
 			try {
 				if (segment.startsWith("OBX")) {
-					String idName = readField(fields, 3);
-					String val = readField(fields, 5);
+					String idName = HL7Utils.readField(fields, 3);
+					String val = HL7Utils.readField(fields, 5);
 					if (val != null && !val.isEmpty()) {
 						if (idName.startsWith("101^")) {
 							hr = val;
@@ -159,9 +160,9 @@ public class Models {
 					}
 					if (fields.length > 13) {
 						Date d = _sdf.parse(fields[14]);
-						timestamp = d.getTime();
+						_timestamp = d.getTime();
 					} else {
-						timestamp = new Date().getTime();
+						_timestamp = new Date().getTime() / 1000 * 1000;
 					}
 				}
 			} catch (Exception e) {
@@ -171,26 +172,31 @@ public class Models {
 
 		public void publish() {
 			JSONObject json = new JSONObject();
-			if (hr != null && !hr.isEmpty()) {
+			if (hr != null && !hr.isEmpty() && !hr.startsWith("-100")) {
 				json.put("HEART_BEAT", hr);
 			}
-			if (sys != null && !sys.isEmpty()) {
+			if (sys != null && !sys.isEmpty() && !sys.startsWith("-100")) {
 				json.put("NBP_SYS", sys);
 			}
-			if (dia != null && !dia.isEmpty()) {
+			if (dia != null && !dia.isEmpty() && !dia.startsWith("-100")) {
 				json.put("NBP_DIA", dia);
 			}
-			if (mean != null && !mean.isEmpty()) {
+			if (mean != null && !mean.isEmpty() && !mean.startsWith("-100")) {
 				json.put("NBP_MEAN", mean);
 			}
-			if (rr != null && !rr.isEmpty()) {
+			if (rr != null && !rr.isEmpty() && !rr.startsWith("-100")) {
 				json.put("RESP_RATE", rr);
 			}
-			if (spo2 != null && !spo2.isEmpty()) {
+			if (spo2 != null && !spo2.isEmpty() && !spo2.startsWith("-100")) {
 				json.put("SPO2", spo2);
 			}
+			if (temp != null && !temp.isEmpty() && !temp.startsWith("-100")) {
+				json.put("TEMP", temp);
+			}
 			if (!json.isEmpty()) {
-				json.put("timestamp", timestamp);
+				if (_timestamp > 0) {
+					json.put("timestamp", _timestamp);
+				}
 				MqttPublisher.addMessage(json.toString());
 			}
 		}
