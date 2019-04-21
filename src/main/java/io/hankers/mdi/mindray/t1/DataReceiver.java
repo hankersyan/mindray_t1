@@ -1,25 +1,26 @@
 package io.hankers.mdi.mindray.t1;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import io.hankers.mdi.mdi_utils.MDILog;
 import io.hankers.mdi.mindray.t1.Models.HL7Message;
 import io.hankers.mdi.mindray.t1.Models.HL7Utils;
 import io.hankers.mdi.mindray.t1.Models.VitalSign;
+import io.hankers.mdi.mindray.t1.Models.Wave;
 
 public class DataReceiver extends Thread {
 	Socket _socket;
-	private char[] _cbuf = new char[2048];
+	private byte[] _buf = new byte[2048];
 	String _ip;
 	int _port = 4601;
-	List<HL7Message> _msgList = new ArrayList<HL7Message>();
+	HL7Message _cachedMsg;
 
 	public DataReceiver(String ip, int port) throws UnknownHostException, IOException {
 		_ip = ip;
@@ -56,39 +57,42 @@ public class DataReceiver extends Thread {
 		int offset = 0;
 		while (!Thread.currentThread().isInterrupted()) {
 			try {
-				// PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-				BufferedReader in = new BufferedReader(new InputStreamReader(_socket.getInputStream()));
+				InputStream ins = _socket.getInputStream();
 
 				int readCount = 0;
 				while (!Thread.currentThread().isInterrupted()) {
-					readCount = in.read(_cbuf, offset, _cbuf.length - offset);
+					readCount = ins.read(_buf, offset, _buf.length - offset);
 
 					final int availableCount = offset + readCount;
 
-					int unprocessed = cutHl7(_cbuf, availableCount);
+					int unprocessed = cutHl7(_buf, availableCount);
 					if (unprocessed > 0 && availableCount > unprocessed) {
 						int m = 0;
 						for (int i = unprocessed; i < availableCount; i++) {
-							_cbuf[m++] = _cbuf[unprocessed];
+							_buf[m++] = _buf[unprocessed];
 						}
 						offset = availableCount - unprocessed;
 					} else {
 						offset = 0;
 					}
+
+					// MUST set the correct encoding charset
+					// cachedStr = cachedStr.concat(new String(_buf, 0, readCount,
+					// StandardCharsets.US_ASCII));
 				}
-				in.close();
+				ins.close();
 			} catch (Exception e) {
 				MDILog.e(e);
 			}
 		}
 	}
 
-	private int cutHl7(char[] buf, int count) {
+	private int cutHl7(byte[] buf, int count) {
 		int pos0B = -1;
 		int pos1C = -1;
 		int last1C = -1;
 		for (int i = 0; i < count && i < buf.length; i++) {
-			switch (_cbuf[i]) {
+			switch (buf[i]) {
 			case 0x0B:
 				pos0B = i;
 				break;
@@ -96,7 +100,7 @@ public class DataReceiver extends Thread {
 				pos1C = i;
 				if (pos0B >= 0 && pos1C >= 0) {
 					last1C = i;
-					processHl7(new String(buf, pos0B + 1, pos1C - pos0B - 1));
+					processHl7(buf, pos0B + 1, pos1C - pos0B - 1);
 				}
 				break;
 			}
@@ -104,23 +108,58 @@ public class DataReceiver extends Thread {
 		return last1C + 1;
 	}
 
-	private void processHl7(String hl7) {
-		HL7Message msg = HL7Utils.create(hl7.getBytes(), hl7.length());
-		// msg.publish();
-		if (_msgList.size() > 0) {
-			if (_msgList.get(0)._timestamp != msg._timestamp) {
-				long ts = _msgList.get(0)._timestamp;
-//				if () {
-//					
-//				}
+	private void processHl7(byte[] buf, int offset, int length) {
+		HL7Message newMsg = HL7Utils.create(buf, offset, length);
+
+		if (newMsg == null || newMsg.isEmpty()) {
+			// do nothing
+		} else if (newMsg instanceof Wave) {
+			newMsg.publish();
+		} else if (_cachedMsg == null) {
+			_cachedMsg = newMsg;
+		} else if (_cachedMsg._timestamp == newMsg._timestamp) {
+			VitalSign vsMsg = (VitalSign) _cachedMsg;
+			VitalSign vsNewMsg = (VitalSign) newMsg;
+			if (vsMsg != null && vsNewMsg != null) {
+				if (HL7Utils.isValidValue(vsNewMsg.co2)) {
+					vsMsg.co2 = vsNewMsg.co2;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.dia)) {
+					vsMsg.dia = vsNewMsg.dia;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.hr)) {
+					vsMsg.hr = vsNewMsg.hr;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.mean)) {
+					vsMsg.mean = vsNewMsg.mean;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.pvc)) {
+					vsMsg.pvc = vsNewMsg.pvc;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.rr)) {
+					vsMsg.rr = vsNewMsg.rr;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.spo2)) {
+					vsMsg.spo2 = vsNewMsg.spo2;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.sys)) {
+					vsMsg.sys = vsNewMsg.sys;
+				}
+				if (HL7Utils.isValidValue(vsNewMsg.temp)) {
+					vsMsg.temp = vsNewMsg.temp;
+				}
 			}
+		} else {
+			// MDILog.d("publishing {}, {}", _cachedMsg, newMsg);
+			_cachedMsg.publish();
+			_cachedMsg = newMsg;
 		}
-		_msgList.add(msg);
 	}
 
 	public static class HeartBeat extends Thread {
 		Socket _sk;
-		byte[] _content = "MSH|^~\\&|||||||ORU^R01|106|P|2.3.1|".getBytes();
+		byte[] _content = "MSH|^~\\&|||||||ORU^R01|106|P|2.3.1|\r".getBytes(StandardCharsets.US_ASCII);
+		static SimpleDateFormat _sdf = new SimpleDateFormat("MMddHHmmssSSS");
 
 		public HeartBeat(Socket sk) {
 			_sk = sk;
@@ -132,6 +171,14 @@ public class DataReceiver extends Thread {
 					OutputStream os = _sk.getOutputStream();
 					os.write(0x0B);
 					os.write(_content);
+					os.write(0x1C);
+					os.write(0x0D);
+
+					String ts = _sdf.format(new Date());
+					String queryWave = "MSH|^~\\&|||||||QRY^R02|1203|P|2.3.1\rQRD|" + ts + "|R|I|Q" + ts
+							+ "|||||RES\rQRF|MON||||0&0^1^1^1^\r";
+					os.write(0x0B);
+					os.write(queryWave.getBytes(StandardCharsets.US_ASCII));
 					os.write(0x1C);
 					os.write(0x0D);
 				} catch (IOException e) {

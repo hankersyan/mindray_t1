@@ -38,7 +38,7 @@ public class MonitorSniffer extends Thread {
 
 					System.out.format("Connection Indication from %s:%d", address.getHostAddress(), port);
 
-					ConnectIndication conn = (ConnectIndication) HL7Utils.create(_cbuf, packet.getLength());
+					ConnectIndication conn = (ConnectIndication) HL7Utils.create(_cbuf, 0, packet.getLength());
 
 					if (conn._ip != null && !conn._ip.isEmpty()) {
 						new DataReceiver(conn._ip, conn._port).start();
