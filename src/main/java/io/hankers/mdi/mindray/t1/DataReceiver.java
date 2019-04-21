@@ -158,8 +158,9 @@ public class DataReceiver extends Thread {
 
 	public static class HeartBeat extends Thread {
 		Socket _sk;
-		byte[] _content = "MSH|^~\\&|||||||ORU^R01|106|P|2.3.1|\r".getBytes(StandardCharsets.US_ASCII);
-		static SimpleDateFormat _sdf = new SimpleDateFormat("MMddHHmmssSSS");
+		static final byte[] _hearbeat = "MSH|^~\\&|||||||ORU^R01|106|P|2.3.1|\r".getBytes(StandardCharsets.US_ASCII);
+		static final SimpleDateFormat _sdf = new SimpleDateFormat("yyyyMMddHHmmssSSS");
+		static final String _queryAllWaveFormat = "MSH|^~\\&|||||||QRY^R02|1203|P|2.3.1\rQRD|{}|R|I|Q{}|||||RES\rQRF|MON||||0&0^1^1^1^\r";
 
 		public HeartBeat(Socket sk) {
 			_sk = sk;
@@ -170,13 +171,13 @@ public class DataReceiver extends Thread {
 				try {
 					OutputStream os = _sk.getOutputStream();
 					os.write(0x0B);
-					os.write(_content);
+					os.write(_hearbeat);
 					os.write(0x1C);
 					os.write(0x0D);
 
-					String ts = _sdf.format(new Date());
-					String queryWave = "MSH|^~\\&|||||||QRY^R02|1203|P|2.3.1\rQRD|" + ts + "|R|I|Q" + ts
-							+ "|||||RES\rQRF|MON||||0&0^1^1^1^\r";
+					Date now = new Date();
+					String timeStr = _sdf.format(now);
+					String queryWave = String.format(_queryAllWaveFormat, timeStr, now.getTime());
 					os.write(0x0B);
 					os.write(queryWave.getBytes(StandardCharsets.US_ASCII));
 					os.write(0x1C);

@@ -336,7 +336,7 @@ public class Models {
 				for (Integer key : _values.keySet()) {
 					String waveName = getWaveName(key);
 					if (waveName != null && !waveName.isEmpty()) {
-						json.put(waveName, _values.get(key));
+						json.put(waveName, resample128(_values.get(key)));
 					} else {
 						MDILog.i("NULL Name for {}", key);
 					}
@@ -354,6 +354,15 @@ public class Models {
 		@Override
 		public boolean isEmpty() {
 			return _values == null || _values.size() == 0;
+		}
+
+		private int[] resample128(int[] src) {
+			float step = (float) (src.length * 1.0 / 128);
+			int[] ret = new int[128];
+			for (int i = 0; i < ret.length; i++) {
+				ret[i] = src[(int) (i * step)];
+			}
+			return ret;
 		}
 
 		private String getWaveName(int waveId) {
