@@ -198,19 +198,19 @@ public class Models {
 		public String toString() {
 			JSONObject json = new JSONObject();
 			if (HL7Utils.isValidValue(hr)) {
-				json.put("HEART_BEAT", hr);
+				json.put("HR", hr);
 			}
 			if (HL7Utils.isValidValue(sys)) {
-				json.put("NBP_SYS", sys);
+				json.put("NBPS", sys);
 			}
 			if (HL7Utils.isValidValue(dia)) {
-				json.put("NBP_DIA", dia);
+				json.put("NBPD", dia);
 			}
 			if (HL7Utils.isValidValue(mean)) {
-				json.put("NBP_MEAN", mean);
+				json.put("NBPM", mean);
 			}
 			if (HL7Utils.isValidValue(rr)) {
-				json.put("RESP_RATE", rr);
+				json.put("RESP", rr);
 			}
 			if (HL7Utils.isValidValue(spo2)) {
 				json.put("SPO2", spo2);
